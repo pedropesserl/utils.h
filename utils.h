@@ -42,6 +42,14 @@ typedef struct {
     char *data;
 } ut_string;
 
+// source: https://github.com/tsoding/nob.h
+// Macros for printing a ut_string with printf
+#define STRFMT "%.*s"
+#define FMTSTR(string) (int)(string).size, (string).data
+// usage:
+//   ut_string name = ...;
+//   printf("Name: " STRFMT "\n", FMTSTR(name));
+
 // These functions create a new string from the inputs. The caller should free
 // the allocated memory.
 ut_string ut_string_from_cstr(char *cstr);
