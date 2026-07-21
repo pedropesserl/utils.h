@@ -2,6 +2,8 @@
 #define UTILS_H_
 
 #include <assert.h>
+#include <ctype.h> // tolower and toupper
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,6 +33,15 @@
         (array)->data[(array)->size++] = (item); \
     } while (0)
 
+// source: https://github.com/tsoding/nob.h
+// Append several items to a dynamic array
+#define ut_array_append_many(array, items, items_count) \
+    do { \
+        ut_array_reserve((array), (array)->size + (items_count)); \
+        memcpy((array)->data + (array)->size, (items), (items_count) * sizeof(*(array)->data)); \
+        (array)->size += (items_count); \
+    } while (0)
+
 #define ut_array_free(array) free((array)->data)
 
 // Allocates memory with malloc and asserts that the returned pointer is not null.
@@ -41,6 +52,12 @@ typedef struct {
     size_t capacity;
     char *data;
 } ut_string;
+
+typedef struct {
+    size_t size;
+    size_t capacity;
+    ut_string *data;
+} ut_string_array;
 
 // source: https://github.com/tsoding/nob.h
 // Macros for printing a ut_string with printf
@@ -56,6 +73,22 @@ ut_string ut_string_from_cstr(char *cstr);
 char *ut_cstr_from_string(ut_string string);
 ut_string ut_string_dup(ut_string src);
 ut_string ut_string_concat(ut_string a, ut_string b);
+ut_string ut_string_to_lower(ut_string string);
+ut_string ut_string_to_upper(ut_string string);
+ut_string ut_string_slice(ut_string string, size_t index, size_t size);
+
+// concats s with other, reallocating the contents of s
+void ut_string_concat_in_place(ut_string *s, ut_string other);
+
+// Returns the index of the first appearance of character c in string or -1 if not found
+int ut_string_find(ut_string string, char c);
+
+ut_string_array ut_string_split(ut_string string, const char *delimiters);
+
+void ut_string_free(ut_string *string);
+
+// Returns false if there was an error when reading or writing the file
+bool ut_read_file_to_string(ut_string *string, const char *filepath);
 
 #endif // UTILS_H_
 
@@ -109,7 +142,122 @@ ut_string ut_string_concat(ut_string a, ut_string b) {
     };
 }
 
+ut_string ut_string_to_lower(ut_string string) {
+    ut_string result = {0};
+    for (size_t i = 0; i < string.size; i++) {
+        ut_array_append(&result, tolower(string.data[i]));
+    }
+    return result;
+}
+
+ut_string ut_string_to_upper(ut_string string) {
+    ut_string result = {0};
+    for (size_t i = 0; i < string.size; i++) {
+        ut_array_append(&result, toupper(string.data[i]));
+    }
+    return result;
+}
+
+ut_string ut_string_slice(ut_string string, size_t index, size_t size) {
+    ut_string result = {0};
+    if (index >= string.size) {
+        return result;
+    }
+    if (index + size > string.size) {
+        size = string.size - index;
+    }
+    ut_array_append_many(&result, string.data + index, size);
+    return result;
+}
+
+void ut_string_concat_in_place(ut_string *s, ut_string other) {
+    ut_array_append_many(s, other.data, other.size);
+}
+
+int ut_string_find(ut_string string, char c) {
+    for (size_t i = 0; i < string.size; i++) {
+        if (string.data[i] == c) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+ut_string_array ut_string_split(ut_string string, const char *delimiters) {
+    ut_string delims = ut_string_from_cstr((char*)delimiters);
+    ut_string_array arr = {0};
+    // using <= here allows to get an empty string after the last delimiter if it's the last character of the string
+    for (size_t i = 0; i <= string.size; i++) {
+        ut_string s = {0};
+        while (i < string.size && ut_string_find(delims, string.data[i]) == -1) {
+            ut_array_append(&s, string.data[i]);
+            i++;
+        }
+        ut_array_append(&arr, s);
+    }
+    ut_array_free(&delims);
+    return arr;
+}
+
+ut_string ut_string_array_concat(ut_string_array array) {
+    ut_string string = {0};
+    for (size_t i = 0; i < array.size; i++) {
+        ut_string_concat_in_place(&string, array.data[i]);
+    }
+    return string;
+}
+
+void ut_string_free(ut_string *string) {
+    ut_array_free(string);
+}
+
+bool ut_read_file_to_string(ut_string *string, const char *filepath) {
+    FILE *file = fopen(filepath, "r");
+    if (!file) {
+        return false;
+    }
+    fseek(file, 0, SEEK_END);
+    size_t filesize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    ut_string_free(string);
+    string->capacity = size_t_max(filesize, UT_ARRAY_MIN_CAPACITY);
+    string->size = filesize;
+    string->data = ut_alloc(filesize);
+    fread(string->data, 1, filesize, file);
+    fclose(file);
+
+    return true;
+}
+
 #endif // UTILS_IMPLEMENTATION
+
+// stolen from https://github.com/tsoding/nob.h
+#ifdef UTILS_STRIP_PREFIXES
+
+#define array_reserve ut_array_reserve
+#define array_append ut_array_append
+#define array_append_many ut_array_append_many
+#define array_append_array ut_array_append_array
+#define array_free ut_array_free
+typedef ut_string string;
+typedef ut_string_array string_array;
+#define string_from_cstr ut_string_from_cstr
+#define cstr_from_string ut_cstr_from_string
+#define string_dup ut_string_dup
+#define string_concat ut_string_concat
+#define string_to_lower ut_string_to_lower
+#define string_to_upper ut_string_to_upper
+#define string_slice ut_string_slice
+#define string_concat_in_place ut_string_concat_in_place
+#define string_find ut_string_find
+#define string_split ut_string_split
+#define string_array_concat ut_string_array_concat
+#define string_free ut_string_free
+#define read_file_to_string ut_read_file_to_string
+#define write_string_to_file ut_write_string_to_file
+
+#endif // UTILS_STRIP_PREFIXES
 
 // LICENSE
 // Copyright (c) 2026 Pedro Pesserl
