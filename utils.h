@@ -42,6 +42,14 @@
         (array)->size += (items_count); \
     } while (0)
 
+// source: https://github.com/tsoding/nob.h
+#define ut_array_remove_unordered(array, i) \
+    do { \
+        size_t j = (i); \
+        assert(j < (array)->size); \
+        (array)->data[j] = (array)->data[--(array)->size]; \
+    } while(0)
+
 #define ut_array_free(array) free((array)->data)
 
 // Allocates memory with malloc and asserts that the returned pointer is not null.
@@ -238,7 +246,7 @@ bool ut_read_file_to_string(ut_string *string, const char *filepath) {
 #define array_reserve ut_array_reserve
 #define array_append ut_array_append
 #define array_append_many ut_array_append_many
-#define array_append_array ut_array_append_array
+#define array_remove_unordered ut_array_remove_unordered
 #define array_free ut_array_free
 typedef ut_string string;
 typedef ut_string_array string_array;
